@@ -49,7 +49,7 @@ graph TD
         B -- Push Trigger --> C[Test & Lint]
         C --> D[Build Docker Image]
         D --> E[Push to GitHub Container Registry]
-        E --> F[Security Scan (Trivy)]
+        E --> F[Security Scan Trivy]
     end
 
     %% Deployment Section
@@ -77,6 +77,7 @@ graph TD
 
     %% Feedback Loop
     P -- Informs --> A
+
 ```
 
 ## Core Features
@@ -118,8 +119,9 @@ graph TD
 │   ├── alertmanager.yaml
 │   ├── docker-compose.monitoring.yml
 │   └── prometheus.yaml
-├── docker-compose.yaml      # Docker Compose for local development
-├── Dockerfile              # Multi-stage Dockerfile for the application
+├── docker/         # Terraform Infrastructure as Code
+│   ├── docker-compose.yaml
+│   └── Dockerfile
 └── README.md               # This documentation file
 ```
 
