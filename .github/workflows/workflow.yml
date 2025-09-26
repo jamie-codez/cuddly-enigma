@@ -77,7 +77,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ env.BRANCH }}:${{ env.VERSION }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ env.BRANCH }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -101,7 +101,7 @@ jobs:
 
       - name: Output image
         id: image
-        run: echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}" >> $GITHUB_OUTPUT
+        run: echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ env.BRANCH }}:${{ env.VERSION }}" >> $GITHUB_OUTPUT
 
   prepare-env:
     name: Prepare Environment Variables
