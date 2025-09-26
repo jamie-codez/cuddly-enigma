@@ -39,30 +39,35 @@ loop.
 
 ```mermaid
 graph TD
-    subgraph "Development"
+    %% Development Section
+    subgraph Development["Development"]
         A[Developer Commits Code] --> B{GitHub Repository}
     end
 
-    subgraph "CI/CD Pipeline (GitHub Actions)"
+    %% CI/CD Pipeline Section
+    subgraph CICD["CI/CD Pipeline (GitHub Actions)"]
         B -- Push Trigger --> C[Test & Lint]
         C --> D[Build Docker Image]
         D --> E[Push to GitHub Container Registry]
-        E --> F[Security Scan (Trivy)]
+        E --> F[Security Scan Trivy]
     end
 
-    subgraph "Deployment & Configuration"
+    %% Deployment Section
+    subgraph Deployment["Deployment & Configuration"]
         F -- Deploy Trigger --> G[Deploy to Cloud VM]
         G -- Uses SSH Key --> H((Cloud VM))
         I[Ansible Playbook] -- Configures --> H
     end
     
-    subgraph "Cloud Infrastructure (AWS/GCP/Azure)"
+    %% Cloud Infrastructure Section
+    subgraph Cloud["Cloud Infrastructure (AWS/GCP/Azure)"]
         J[Terraform IaC] -- Provisions --> H
         H -- Runs --> K[App Container]
         H -- Runs --> L[Monitoring Stack]
     end
 
-    subgraph "SRE & Monitoring"
+    %% SRE & Monitoring Section
+    subgraph SRE["SRE & Monitoring"]
         L -- Scrapes Metrics --> K
         L -- Scrapes Metrics --> H
         M[Prometheus] -- Feeds --> N[Grafana Dashboards]
@@ -70,7 +75,9 @@ graph TD
         O -- Notifies --> P[Slack Channel]
     end
 
+    %% Feedback Loop
     P -- Informs --> A
+
 ```
 
 ## Core Features
@@ -112,8 +119,9 @@ graph TD
 │   ├── alertmanager.yaml
 │   ├── docker-compose.monitoring.yml
 │   └── prometheus.yaml
-├── docker-compose.yaml      # Docker Compose for local development
-├── Dockerfile              # Multi-stage Dockerfile for the application
+├── docker/         # Terraform Infrastructure as Code
+│   ├── docker-compose.yaml
+│   └── Dockerfile
 └── README.md               # This documentation file
 ```
 

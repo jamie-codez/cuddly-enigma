@@ -10,12 +10,13 @@ const promClient = require('prom-client');
 // --- Initial Setup ---
 dotenv.config();
 const app = express();
-const itemRouter = require('./routes/itemRoutes');
+const itemRouter = require('./routes/items-routes');
+const MONGODB_URI = `mongodb://${process.env.APP_DATABASE_USERNAME}:${process.env.APP_DATABASE_PASSWORD}@${process.env.APP_DATABASE_HOST}:${process.env.APP_DATABASE_PORT}/${process.env.APP_DATABASE_NAME}`
 
 // --- Configuration ---
 const config = {
-    port: process.env.PORT || 3000,
-    mongodbUri: process.env.MONGODB_URI,
+    port: process.env.APP_PORT || 3000,
+    mongodbUri: MONGODB_URI,
     corsOrigin: process.env.CORS_ORIGIN || '*',
 };
 
@@ -26,8 +27,7 @@ app.use(compression()); // Compresses response bodies
 app.use(express.json()); // Body parser for JSON
 
 // --- Prometheus Metrics Setup ---
-const collectDefaultMetrics = promClient.collectDefaultMetrics;
-collectDefaultMetrics({timeout: 5000}); // Collects default Node.js metrics
+promClient.collectDefaultMetrics({timeout: 5000}); // Collects default Node.js metrics
 
 const httpRequestDuration = new promClient.Histogram({
     name: 'http_request_duration_seconds',
