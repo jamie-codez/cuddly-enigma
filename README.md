@@ -40,37 +40,37 @@ loop.
 ```mermaid
 graph TD
     subgraph "Development"
-        A[Developer Commits Code] --> B{GitHub Repository};
+        A[Developer Commits Code] --> B{GitHub Repository}
     end
 
     subgraph "CI/CD Pipeline (GitHub Actions)"
-        B -- Push Trigger --> C[Test & Lint];
-        C --> D[Build Docker Image];
-        D --> E[Push to GitHub Container Registry];
-        E --> F[Security Scan (Trivy)];
+        B -- Push Trigger --> C[Test & Lint]
+        C --> D[Build Docker Image]
+        D --> E[Push to GitHub Container Registry]
+        E --> F[Security Scan (Trivy)]
     end
 
     subgraph "Deployment & Configuration"
-        F -- Deploy Trigger --> G[Deploy to Cloud VM];
-        G -- Uses SSH Key --> H((Cloud VM));
-        I[Ansible Playbook] -- Configures --> H;
+        F -- Deploy Trigger --> G[Deploy to Cloud VM]
+        G -- Uses SSH Key --> H((Cloud VM))
+        I[Ansible Playbook] -- Configures --> H
     end
     
     subgraph "Cloud Infrastructure (AWS/GCP/Azure)"
-        J[Terraform IaC] -- Provisions --> H;
-        H -- Runs --> K[App Container];
-        H -- Runs --> L[Monitoring Stack];
+        J[Terraform IaC] -- Provisions --> H
+        H -- Runs --> K[App Container]
+        H -- Runs --> L[Monitoring Stack]
     end
 
     subgraph "SRE & Monitoring"
-        L -- Scrapes Metrics --> K;
-        L -- Scrapes Metrics --> H;
-        M[Prometheus] -- Feeds --> N[Grafana Dashboards];
-        M -- Sends Alerts --> O[Alertmanager];
-        O -- Notifies --> P[Slack Channel];
+        L -- Scrapes Metrics --> K
+        L -- Scrapes Metrics --> H
+        M[Prometheus] -- Feeds --> N[Grafana Dashboards]
+        M -- Sends Alerts --> O[Alertmanager]
+        O -- Notifies --> P[Slack Channel]
     end
 
-    P -- Informs --> A;
+    P -- Informs --> A
 ```
 
 ## Core Features
