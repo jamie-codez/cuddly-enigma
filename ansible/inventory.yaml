@@ -1,0 +1,9 @@
+all:
+  hosts:
+    webserver:
+      ansible_host: 42.0.193.101
+      # The user depends on the cloud provider:
+      # AWS/GCP: ubuntu
+      # Azure: azureuser
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: /path/to/your/ssh_private_key.pem
