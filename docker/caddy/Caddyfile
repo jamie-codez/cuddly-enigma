@@ -1,0 +1,7 @@
+mongo-express.rocknite.cc {
+    reverse_proxy mongo-express:8081
+}
+
+app.rocknite.cc {
+    reverse_proxy app:3000
+}
