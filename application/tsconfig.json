@@ -20,6 +20,17 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
+    "noFallthroughCasesInSwitch": false,
+    "paths": {
+      "@app/*": [
+        "src/*"
+      ],
+      "@app/postgres": [
+        "libs/postgres/src"
+      ],
+      "@app/postgres/*": [
+        "libs/postgres/src/*"
+      ]
+    }
   }
 }

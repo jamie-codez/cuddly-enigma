@@ -1,0 +1,16 @@
+---
+services:
+  backend:
+    container_name: backend
+    image: ghcr.io/jamie-codez/cuddly-enigma-backend-prod:latest
+    env_file:
+      - .env
+    expose:
+      - ${APP_PORT}
+    networks:
+      - cuddly-enigma
+
+networks:
+  cuddly-enigma:
+    name: cuddly-enigma
+    driver: bridge
