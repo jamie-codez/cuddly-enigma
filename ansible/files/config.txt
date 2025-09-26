@@ -1,0 +1,7 @@
+# This is a sample configuration file managed by Ansible.
+# Deployed on: {{ ansible_date_time.iso8601 }}
+# Deployed to: {{ inventory_hostname }}
+
+FEATURE_FLAG_A=true
+API_TIMEOUT=5000
+LOG_LEVEL=info

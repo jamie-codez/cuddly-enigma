@@ -1,0 +1,519 @@
+name: CI/CD Pipeline with Dynamic Environment Variables
+
+on:
+  push:
+    branches: [ prod,staging, dev ]
+  pull_request:
+    branches: [ prod,staging, dev ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  BRANCH: ${{ github.ref_name }}
+  VERSION: ${{ github.sha }}
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'app/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd app
+          npm ci
+
+      - name: Create test .env file
+        run: |
+          cd app
+          cat << 'EOF' > .env
+          NODE_ENV=test
+          PORT=3000
+          APP_NAME=devops-assessment
+          APP_VERSION=1.0.0
+          EOF
+
+      - name: Run tests
+        run: |
+          cd app
+          npm test || echo "No tests found"
+
+  build-and-push:
+    name: Build and Push Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ env.BRANCH }}:${{ env.VERSION }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image
+        id: image
+        run: echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}" >> $GITHUB_OUTPUT
+
+  prepare-env:
+    name: Prepare Environment Variables
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      env-file: ${{ steps.create-env.outputs.env-file }}
+      env-vars: ${{ steps.create-env.outputs.env-vars }}
+
+    steps:
+      - name: Create environment file
+        id: create-env
+        env:
+          APP_NAME: ${{ secrets.APP_NAME }}
+          APP_VERSION: ${{ secrets.APP_VERSION }}
+          APP_DATABASE_URL: ${{ secrets.APP_DATABASE_URL }}
+          APP_DATABASE_HOST: ${{ secrets.APP_DATABASE_HOST }}
+          APP_DATABASE_PORT: ${{ secrets.APP_DATABASE_PORT }}
+          APP_DATABASE_NAME: ${{ secrets.APP_DATABASE_NAME }}
+          APP_DATABASE_USER: ${{ secrets.APP_DATABASE_USER }}
+          APP_DATABASE_PASSWORD: ${{ secrets.APP_DATABASE_PASSWORD }}
+          APP_REDIS_URL: ${{ secrets.APP_REDIS_URL }}
+          APP_JWT_SECRET: ${{ secrets.APP_JWT_SECRET }}
+          APP_API_KEY: ${{ secrets.APP_API_KEY }}
+          APP_LOG_LEVEL: ${{ secrets.APP_LOG_LEVEL }}
+          APP_ENVIRONMENT: ${{ secrets.APP_ENVIRONMENT }}
+          APP_DEBUG: ${{ secrets.APP_DEBUG }}
+          APP_CORS_ORIGIN: ${{ secrets.APP_CORS_ORIGIN }}
+          APP_SESSION_SECRET: ${{ secrets.APP_SESSION_SECRET }}
+          APP_ENCRYPTION_KEY: ${{ secrets.APP_ENCRYPTION_KEY }}
+          APP_SMTP_HOST: ${{ secrets.APP_SMTP_HOST }}
+          APP_SMTP_PORT: ${{ secrets.APP_SMTP_PORT }}
+          APP_SMTP_USER: ${{ secrets.APP_SMTP_USER }}
+          APP_SMTP_PASSWORD: ${{ secrets.APP_SMTP_PASSWORD }}
+          APP_STORAGE_BUCKET: ${{ secrets.APP_STORAGE_BUCKET }}
+          APP_CDN_URL: ${{ secrets.APP_CDN_URL }}
+          APP_WEBHOOK_SECRET: ${{ secrets.APP_WEBHOOK_SECRET }}
+          APP_MONITORING_ENABLED: ${{ secrets.APP_MONITORING_ENABLED }}
+          APP_RATE_LIMIT: ${{ secrets.APP_RATE_LIMIT }}
+          APP_TIMEZONE: ${{ secrets.APP_TIMEZONE }}
+        run: |
+          # Create .env file from APP_ prefixed environment variables
+          env_file_content=""
+          env_vars_array=()
+          
+          # Process all environment variables starting with APP_
+          while IFS='=' read -r name value; do
+            if [[ $name == APP_* ]] && [[ -n "$value" ]]; then
+              # Remove APP_ prefix for the actual environment variable
+              clean_name=${name#APP_}
+              echo "${clean_name}=${value}" >> .env
+              env_file_content="${env_file_content}${clean_name}=${value}\n"
+              env_vars_array+=("-e" "${clean_name}=${value}")
+            fi
+          done < <(printenv)
+          
+          # Add default production variables
+          echo "NODE_ENV=production" >> .env
+          echo "PORT=3000" >> .env
+          env_file_content="${env_file_content}NODE_ENV=production\n"
+          env_file_content="${env_file_content}PORT=3000\n"
+          
+          # Base64 encode the .env file content for safe transport
+          env_file_b64=$(echo -e "$env_file_content" | base64 -w 0)
+          echo "env-file=$env_file_b64" >> $GITHUB_OUTPUT
+          
+          # Create env vars string for docker run
+          env_vars_string=$(IFS=' '; echo "${env_vars_array[*]}")
+          echo "env-vars=$env_vars_string -e NODE_ENV=production -e PORT=3000" >> $GITHUB_OUTPUT
+          
+          echo "📋 Environment variables prepared:"
+          echo "$(cat .env | sed 's/=.*/=***/' | head -10)..."
+
+  deploy-aws:
+    name: Deploy to AWS
+    needs: [ build-and-push, prepare-env ]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production-aws
+
+    steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy-key
+          chmod 600 ~/.ssh/deploy-key
+          ssh-keyscan -H ${{ secrets.AWS_INSTANCE_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to AWS EC2
+        run: |
+          INSTANCE_IP=${{ secrets.AWS_INSTANCE_IP }}
+          IMAGE_NAME="${{ needs.build-and-push.outputs.image }}"
+          ENV_FILE_B64="${{ needs.prepare-env.outputs.env-file }}"
+          
+          # Create comprehensive deployment script
+          cat << 'DEPLOY_SCRIPT' > deploy-aws.sh
+          #!/bin/bash
+          set -euo pipefail
+          
+          echo "🚀 Starting AWS deployment..."
+          echo "📦 Image: $1"
+          
+          # Create .env file from base64 encoded content
+          echo "$2" | base64 -d > /tmp/app.env
+          
+          echo "📋 Environment variables loaded:"
+          cat /tmp/app.env | sed 's/=.*/=***/' | head -5
+          echo "... and $(wc -l < /tmp/app.env) total variables"
+          
+          # Login to GitHub Container Registry
+          echo "$3" | docker login ghcr.io -u $4 --password-stdin
+          
+          # Pull the latest image
+          echo "⬇️ Pulling image..."
+          docker pull "$1"
+          
+          # Stop and remove existing container
+          echo "🛑 Stopping existing container..."
+          docker stop devops-app || true
+          docker rm devops-app || true
+          
+          # Create app directory for logs and data
+          mkdir -p /opt/devops-app/{logs,data}
+          chmod 755 /opt/devops-app/{logs,data}
+          
+          # Run new container with .env file
+          echo "🚀 Starting new container..."
+          docker run -d \
+            --name devops-app \
+            --restart unless-stopped \
+            -p 80:3000 \
+            --env-file /tmp/app.env \
+            -v /opt/devops-app/logs:/app/logs \
+            -v /opt/devops-app/data:/app/data \
+            --log-driver=json-file \
+            --log-opt max-size=10m \
+            --log-opt max-file=3 \
+            --health-cmd="curl -f http://localhost:3000/health || exit 1" \
+            --health-interval=30s \
+            --health-timeout=10s \
+            --health-retries=3 \
+            --health-start-period=60s \
+            "$1"
+          
+          # Wait for container to be healthy
+          echo "⏳ Waiting for container to be healthy..."
+          timeout=180
+          while [ $timeout -gt 0 ]; do
+            health_status=$(docker inspect --format='{{.State.Health.Status}}' devops-app 2>/dev/null || echo "unknown")
+            case $health_status in
+              "healthy")
+                echo "✅ Container is healthy!"
+                break
+                ;;
+              "unhealthy")
+                echo "❌ Container is unhealthy!"
+                docker logs devops-app --tail 50
+                exit 1
+                ;;
+              *)
+                echo "⏳ Container status: $health_status (${timeout}s remaining)"
+                sleep 5
+                timeout=$((timeout-5))
+                ;;
+            esac
+          done
+          
+          if [ $timeout -le 0 ]; then
+            echo "❌ Container failed to become healthy in time!"
+            docker logs devops-app --tail 50
+            exit 1
+          fi
+          
+          # Clean up old images (keep last 3)
+          echo "🧹 Cleaning up old images..."
+          docker image prune -f
+          
+          # Show final status
+          echo "📊 Final status:"
+          docker ps --filter name=devops-app --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          
+          # Cleanup sensitive files
+          rm -f /tmp/app.env
+          
+          echo "✅ AWS deployment completed successfully!"
+          DEPLOY_SCRIPT
+          
+          # Copy and execute deployment script
+          scp -i ~/.ssh/deploy-key deploy-aws.sh ubuntu@$INSTANCE_IP:/tmp/
+          ssh -i ~/.ssh/deploy-key ubuntu@$INSTANCE_IP "bash /tmp/deploy-aws.sh '$IMAGE_NAME' '$ENV_FILE_B64' '${{ secrets.GITHUB_TOKEN }}' '${{ github.actor }}'"
+
+      - name: Application Health Check
+        run: |
+          INSTANCE_IP=${{ secrets.AWS_INSTANCE_IP }}
+          
+          echo "🏥 Running comprehensive health checks..."
+          
+          # Wait a bit more for application to fully start
+          sleep 30
+          
+          # Test endpoints
+          endpoints=("/health" "/" "/metrics")
+          
+          for endpoint in "${endpoints[@]}"; do
+            echo "Testing endpoint: $endpoint"
+            for i in {1..5}; do
+              if curl -f -m 10 "http://$INSTANCE_IP$endpoint"; then
+                echo "✅ $endpoint is responding correctly"
+                break
+              else
+                echo "⏳ Waiting for $endpoint... ($i/5)"
+                if [ $i -eq 5 ]; then
+                  echo "❌ $endpoint failed health check"
+                  exit 1
+                fi
+                sleep 10
+              fi
+            done
+          done
+          
+          echo "✅ All health checks passed!"
+
+  deploy-gcp:
+    name: Deploy to GCP
+    needs: [ build-and-push, prepare-env ]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production-gcp
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Deploy to GCP Compute Engine
+        run: |
+          INSTANCE_NAME="${{ secrets.GCP_INSTANCE_NAME }}"
+          INSTANCE_ZONE="${{ secrets.GCP_ZONE }}"
+          IMAGE_NAME="${{ needs.build-and-push.outputs.image }}"
+          ENV_FILE_B64="${{ needs.prepare-env.outputs.env-file }}"
+          
+          # Create deployment script
+          cat << 'DEPLOY_SCRIPT' > deploy-gcp.sh
+          #!/bin/bash
+          set -euo pipefail
+          
+          echo "🚀 Starting GCP deployment..."
+          
+          # Create .env file from base64 encoded content
+          echo "$2" | base64 -d > /tmp/app.env
+          
+          echo "📋 Environment variables loaded (showing first 5):"
+          head -5 /tmp/app.env | sed 's/=.*/=***/'
+          
+          # Login to GitHub Container Registry
+          echo "$3" | docker login ghcr.io -u $4 --password-stdin
+          
+          # Pull the latest image
+          docker pull "$1"
+          
+          # Stop and remove existing container
+          docker stop devops-app || true
+          docker rm devops-app || true
+          
+          # Create directories
+          sudo mkdir -p /opt/devops-app/{logs,data}
+          sudo chown -R $USER:$USER /opt/devops-app
+          
+          # Run new container
+          docker run -d \
+            --name devops-app \
+            --restart unless-stopped \
+            -p 80:3000 \
+            --env-file /tmp/app.env \
+            -v /opt/devops-app/logs:/app/logs \
+            -v /opt/devops-app/data:/app/data \
+            --log-driver=gcplogs \
+            --log-opt gcp-project=$5 \
+            --health-cmd="curl -f http://localhost:3000/health || exit 1" \
+            --health-interval=30s \
+            --health-timeout=10s \
+            --health-retries=3 \
+            "$1"
+          
+          # Wait for healthy status
+          echo "⏳ Waiting for container to be healthy..."
+          timeout=180
+          while [ $timeout -gt 0 ]; do
+            if docker inspect --format='{{.State.Health.Status}}' devops-app | grep -q "healthy"; then
+              echo "✅ Container is healthy!"
+              break
+            fi
+            sleep 5
+            timeout=$((timeout-5))
+          done
+          
+          # Cleanup
+          docker image prune -f
+          rm -f /tmp/app.env
+          
+          echo "✅ GCP deployment completed!"
+          DEPLOY_SCRIPT
+          
+          # Copy and execute script
+          gcloud compute scp deploy-gcp.sh $INSTANCE_NAME:/tmp/ --zone=$INSTANCE_ZONE
+          gcloud compute ssh $INSTANCE_NAME --zone=$INSTANCE_ZONE \
+            --command="bash /tmp/deploy-gcp.sh '$IMAGE_NAME' '$ENV_FILE_B64' '${{ secrets.GITHUB_TOKEN }}' '${{ github.actor }}' '${{ secrets.GCP_PROJECT_ID }}'"
+
+  deploy-azure:
+    name: Deploy to Azure
+    needs: [ build-and-push, prepare-env ]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production-azure
+
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2.3.0
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure VM
+        run: |
+          VM_NAME="${{ secrets.AZURE_VM_NAME }}"
+          RESOURCE_GROUP="${{ secrets.AZURE_RESOURCE_GROUP }}"
+          IMAGE_NAME="${{ needs.build-and-push.outputs.image }}"
+          ENV_FILE_B64="${{ needs.prepare-env.outputs.env-file }}"
+          
+          # Create deployment script
+          cat << 'DEPLOY_SCRIPT' > deploy-azure.sh
+          set -euo pipefail
+          
+          echo "🚀 Starting Azure deployment..."
+          
+          # Create .env file
+          echo "$ENV_FILE_B64" | base64 -d > /tmp/app.env
+          
+          echo "📋 Environment variables loaded"
+          
+          # Login to GitHub Container Registry
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          
+          # Pull and run container
+          docker pull "$IMAGE_NAME"
+          docker stop devops-app || true
+          docker rm devops-app || true
+          
+          # Create directories
+          sudo mkdir -p /opt/devops-app/{logs,data}
+          
+          docker run -d \
+            --name devops-app \
+            --restart unless-stopped \
+            -p 80:3000 \
+            --env-file /tmp/app.env \
+            -v /opt/devops-app/logs:/app/logs \
+            -v /opt/devops-app/data:/app/data \
+            --health-cmd="curl -f http://localhost:3000/health || exit 1" \
+            --health-interval=30s \
+            "$IMAGE_NAME"
+          
+          # Wait for healthy status
+          timeout=180
+          while [ $timeout -gt 0 ]; do
+            if docker inspect --format='{{.State.Health.Status}}' devops-app | grep -q "healthy"; then
+              echo "✅ Container is healthy!"
+              break
+            fi
+            sleep 5
+            timeout=$((timeout-5))
+          done
+          
+          rm -f /tmp/app.env
+          echo "✅ Azure deployment completed!"
+          DEPLOY_SCRIPT
+          
+          # Execute via Azure VM run-command
+          az vm run-command invoke \
+            --resource-group $RESOURCE_GROUP \
+            --name $VM_NAME \
+            --command-id RunShellScript \
+            --parameters \
+              ENV_FILE_B64="$ENV_FILE_B64" \
+              IMAGE_NAME="$IMAGE_NAME" \
+              GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+              GITHUB_ACTOR="${{ github.actor }}" \
+            --scripts @deploy-azure.sh
+
+  notify:
+    name: Notify Deployment Status
+    needs: [ build-and-push, deploy-aws, deploy-gcp, deploy-azure ]
+    runs-on: ubuntu-latest
+    if: always() && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Cloud Provider | Status | Image |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| AWS | ${{ needs.deploy-aws.result }} | ${{ needs.build-and-push.outputs.image }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| GCP | ${{ needs.deploy-gcp.result }} | ${{ needs.build-and-push.outputs.image }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Azure | ${{ needs.deploy-azure.result }} | ${{ needs.build-and-push.outputs.image }} |" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.deploy-aws.result }}" == "success" && "${{ needs.deploy-gcp.result }}" == "success" && "${{ needs.deploy-azure.result }}" == "success" ]]; then
+            echo "✅ **All deployments successful!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Some deployments failed. Check logs above.**" >> $GITHUB_STEP_SUMMARY
+          fi

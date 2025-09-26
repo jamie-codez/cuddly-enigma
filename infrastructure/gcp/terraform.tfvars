@@ -1,0 +1,8 @@
+project_id          = "jamie-playground"
+region              = "us-central1"
+zone                = "us-central1-a"
+machine_type        = "e2-medium"
+boot_disk_size      = 20
+ssh_user            = "devops"
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+environment         = "dev"
