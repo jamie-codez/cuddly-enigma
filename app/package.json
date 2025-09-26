@@ -1,0 +1,27 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "Simple web-app for assessment.",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
+  "keywords": [
+    "assessment",
+    "web-app"
+  ],
+  "author": {
+    "name": "Jamie omondi",
+    "url": "https://github.com/jamie-codez",
+    "email": "cruiseomondi90@gmail.com"
+  },
+  "license": "ISC",
+  "packageManager": "pnpm@10.15.1",
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
