@@ -1,0 +1,23 @@
+# AWS Configuration
+aws_region    = "us-west-2"
+instance_type = "t3.micro"
+key_pair_name = "devops-assessment-key"
+
+# Project Configuration
+project_name = "devops-assessment"
+environment = "dev"
+
+# Security Configuration
+allowed_cidr_blocks = ["0.0.0.0/0"] # Restrict this in production
+
+# Instance Configuration
+root_volume_size = 20
+enable_monitoring = true
+
+# Additional Tags
+tags = {
+  Owner      = "DevOps Team"
+  Department = "Engineering"
+  CostCenter = "Engineering"
+  Terraform  = "true"
+}

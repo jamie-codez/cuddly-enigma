@@ -1,0 +1,23 @@
+global:
+  resolve_timeout: 5m
+  # Replace with your actual Slack API URL from incoming webhooks
+  slack_api_url: 'https://hooks.slack.com/services/<team id>/<channel id>/<token>'
+
+route:
+  receiver: 'slack-notifications'
+  group_by: [ 'alertname', 'job' ]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 1h
+
+receivers:
+  - name: 'slack-notifications'
+    slack_configs:
+      - channel: '#alerts-devops'
+        send_resolved: true
+        title: '{{ .CommonLabels.alertname }} - {{ .Status | toUpper }}'
+        text: >-
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Description:* {{ .CommonAnnotations.description }}
+          *Severity:* `{{ .CommonLabels.severity }}`
+          *Grafana:* [Link to Dashboard](http://44.237.126.178:3001/d/eejrtwevdesxai)
