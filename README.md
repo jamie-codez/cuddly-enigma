@@ -1,11 +1,3 @@
-Of course, Jamie. A well-documented project is a professional project. This README is designed to be a comprehensive
-guide, enabling anyone from a fellow engineer to a technical assessor to understand, set up, and replicate the entire
-system from scratch.
-
-Here is the detailed README file.
-
----
-
 # Comprehensive DevOps & SRE Assessment Project
 
 This repository contains a complete, end-to-end implementation of a modern web application stack, designed to showcase
